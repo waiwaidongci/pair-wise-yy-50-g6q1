@@ -4,6 +4,7 @@ import ImpositionView from './views/ImpositionView.vue'
 import ProofsView from './views/ProofsView.vue'
 import VersionsView from './views/VersionsView.vue'
 import ExportView from './views/ExportView.vue'
+import InventoryView from './views/InventoryView.vue'
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -13,5 +14,6 @@ export default createRouter({
     { path: '/proofs', component: ProofsView, meta: { title: '打样审批' } },
     { path: '/versions', component: VersionsView, meta: { title: '版本对比' } },
     { path: '/exports', component: ExportView, meta: { title: '导出任务' } },
+    { path: '/inventory', component: InventoryView, meta: { title: '纸张库存' } },
   ],
 })

@@ -5,7 +5,7 @@ export type Page = { pageNo: number; name: string; width: number; height: number
 export type Position = { id: string; pageNo: number; x: number; y: number; rotation: number; front: boolean }
 export type Validation = { id: string; severity: '错误' | '警告'; pageNo?: number; title: string; detail: string }
 export type Proof = { id: string; round: number; date: string; sample: string; deltaE: number; feedback: string; correction: string; owner: string; decision: '待决定' | '通过' | '退回' }
-export type ExportTask = { id: string; name: string; progress: number; status: '排队中' | '生成中' | '已完成' | '已中断'; updatedAt: string; resumable: boolean }
+export type ExportTask = { id: string; name: string; progress: number; status: '排队中' | '生成中' | '已完成' | '已中断'; updatedAt: string; resumable: boolean; reservationId?: string; revisionId?: string; slices?: number; totalSlices?: number }
 
 export const sheetSpec = {
   width: 720,
@@ -45,8 +45,12 @@ const seedProofs: Proof[] = [
 ]
 
 const seedTasks: ExportTask[] = [
-  { id: 'EXP-0925-01', name: '印刷交付包 · PDF/X-4', progress: 72, status: '已中断', updatedAt: '09-25 16:42', resumable: true },
-  { id: 'EXP-0925-02', name: '数字样张低分辨率预览', progress: 100, status: '已完成', updatedAt: '09-25 15:18', resumable: false },
+  // 中断的印刷交付包：预留单 RSV-2609-04 已因纸批数量变更失效 → 待复核；18/24 分片已保留，须重新确认预留才能续作
+  { id: 'EXP-0925-01', name: '印刷交付包 · PDF/X-4', progress: 72, status: '已中断', updatedAt: '09-25 16:42', resumable: true, reservationId: 'RSV-2609-04', revisionId: 'R6', slices: 18, totalSlices: 24 },
+  // 已完成的数字样张：纸已核销
+  { id: 'EXP-0925-02', name: '数字样张低分辨率预览', progress: 100, status: '已完成', updatedAt: '09-25 15:18', resumable: false, reservationId: 'RSV-2609-02', revisionId: 'R5', slices: 12, totalSlices: 12 },
+  // 未开工的加印交付包：无预留单 → 排队待料
+  { id: 'EXP-0925-03', name: '印刷交付包 · 加印版', progress: 0, status: '排队中', updatedAt: '09-25 17:05', resumable: true, revisionId: 'R6', slices: 0, totalSlices: 24 },
 ]
 
 export const useImpositionStore = defineStore('imposition', () => {

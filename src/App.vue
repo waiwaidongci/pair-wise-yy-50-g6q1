@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { useImpositionStore } from './stores/imposition'
+import { useInventoryStore } from './stores/inventory'
 
 const route = useRoute()
 const store = useImpositionStore()
+const inventory = useInventoryStore()
 const mobileOpen = ref(false)
 const title = computed(() => String(route.meta.title ?? '拼版工作台'))
 const nav = [
@@ -15,7 +17,10 @@ const nav = [
   { to: '/proofs', label: '打样审批', icon: 'pi pi-image' },
   { to: '/versions', label: '版本对比', icon: 'pi pi-copy' },
   { to: '/exports', label: '导出任务', icon: 'pi pi-download' },
+  { to: '/inventory', label: '纸张库存', icon: 'pi pi-box' },
 ]
+
+onMounted(() => inventory.load())
 </script>
 
 <template>

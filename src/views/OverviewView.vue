@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import Button from 'primevue/button'
 import ProgressBar from 'primevue/progressbar'
 import Tag from 'primevue/tag'
 import { useImpositionStore } from '../stores/imposition'
+import { useInventoryStore } from '../stores/inventory'
 
 const store = useImpositionStore()
+const inventory = useInventoryStore()
+onMounted(() => inventory.load())
 const errors = computed(() => store.validations.filter((item) => item.severity === '错误').length)
 const pendingProof = computed(() => store.proofs.find((proof) => proof.decision === '待决定'))
+const paperPending = computed(() => store.tasks.filter((task) => inventory.taskPaperStatus(task) !== '已预留').length)
 </script>
 
 <template>
@@ -20,6 +24,7 @@ const pendingProof = computed(() => store.proofs.find((proof) => proof.decision 
     <div class="metric-grid">
       <article class="metric"><span>页面文件</span><strong>{{ store.pages.length }}</strong><small>{{ store.positions.length }} 个已排版位</small></article>
       <article class="metric"><span>预检错误</span><strong class="error">{{ errors }}</strong><small>必须处理后方可锁定</small></article>
+      <article class="metric"><span>纸张待料 / 待复核</span><strong :class="{ error: paperPending }">{{ paperPending }}</strong><small>预留生效前排队</small></article>
       <article class="metric"><span>打样轮次</span><strong>{{ store.proofs.length }}</strong><small>当前 ΔE {{ pendingProof?.deltaE ?? '—' }}</small></article>
       <article class="metric"><span>待恢复导出</span><strong>{{ store.tasks.filter((task) => task.resumable && task.status !== '已完成').length }}</strong><small>断点可继续</small></article>
     </div>
@@ -40,6 +45,7 @@ const pendingProof = computed(() => store.proofs.find((proof) => proof.decision 
           <div><i class="pi pi-exclamation-triangle warn" /><span>折手与页码顺序</span><Tag value="1 项警告" severity="warn" /></div>
           <div><i class="pi pi-times-circle error" /><span>出血与版位安全区</span><Tag :value="`${errors} 项错误`" severity="danger" /></div>
           <div><i class="pi pi-check-circle" /><span>色彩控制条与纸张规格</span><Tag value="通过" severity="success" /></div>
+          <div><i :class="paperPending ? 'pi pi-exclamation-triangle warn' : 'pi pi-check-circle'" /><span>纸张预留与印张用量</span><Tag :value="paperPending ? `${paperPending} 单待料/待复核` : '已预留'" :severity="paperPending ? 'warn' : 'success'" /></div>
         </div>
       </section>
 
