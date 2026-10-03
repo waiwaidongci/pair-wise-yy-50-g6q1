@@ -14,6 +14,7 @@ const nav = [
   { to: '/imposition', label: '拼版工作区', icon: 'pi pi-th-large' },
   { to: '/proofs', label: '打样审批', icon: 'pi pi-image' },
   { to: '/versions', label: '版本对比', icon: 'pi pi-copy' },
+  { to: '/paper', label: '纸张预留账', icon: 'pi pi-book' },
   { to: '/exports', label: '导出任务', icon: 'pi pi-download' },
 ]
 </script>

@@ -5,7 +5,22 @@ export type Page = { pageNo: number; name: string; width: number; height: number
 export type Position = { id: string; pageNo: number; x: number; y: number; rotation: number; front: boolean }
 export type Validation = { id: string; severity: '错误' | '警告'; pageNo?: number; title: string; detail: string }
 export type Proof = { id: string; round: number; date: string; sample: string; deltaE: number; feedback: string; correction: string; owner: string; decision: '待决定' | '通过' | '退回' }
-export type ExportTask = { id: string; name: string; progress: number; status: '排队中' | '生成中' | '已完成' | '已中断'; updatedAt: string; resumable: boolean }
+export type TaskStatus = '排队中' | '生成中' | '已完成' | '已中断' | '待复核'
+// 导出分片：已完成分片带有所用纸批标记，纸批失效后续作分片不得继续混入旧批
+export type ShardSegment = { id: string; name: string; state: '已完成' | '待生成' | '冻结保留'; batchId?: string; batchLabel?: string }
+export type ExportTask = {
+  id: string
+  name: string
+  progress: number
+  status: TaskStatus
+  updatedAt: string
+  resumable: boolean
+  versionId?: string
+  reservationId?: string
+  frozen?: boolean
+  blockedReason?: string
+  shards?: ShardSegment[]
+}
 
 export const sheetSpec = {
   width: 720,
@@ -44,9 +59,27 @@ const seedProofs: Proof[] = [
   { id: 'PRF-02', round: 2, date: '2026-09-25', sample: '数字样张 v2', deltaE: 1.9, feedback: '整体色差改善，P7 出血仍不足。', correction: '重排 P7 版位并增加 2mm 出血。', owner: '林青 / 拼版', decision: '待决定' },
 ]
 
+// 旧任务没有预留单号：在库存台账中统一标成「待复核」，重新确认纸批后才能占用库存
 const seedTasks: ExportTask[] = [
-  { id: 'EXP-0925-01', name: '印刷交付包 · PDF/X-4', progress: 72, status: '已中断', updatedAt: '09-25 16:42', resumable: true },
+  { id: 'EXP-0925-01', name: '印刷交付包 · PDF/X-4（R5 基线）', progress: 72, status: '待复核', updatedAt: '09-25 16:42', resumable: true, versionId: 'VER-R5', frozen: true, blockedReason: '无预留单号，旧纸批归属需重新确认', shards: [
+    { id: 'SEG-01', name: '分片 1-16 · 封面/版权页', state: '冻结保留', batchId: 'LOT-7201', batchLabel: 'LOT-7201（旧批占用）' },
+    { id: 'SEG-02', name: '分片 17-32 · 剧照/曲目表', state: '冻结保留', batchId: 'LOT-7201', batchLabel: 'LOT-7201（旧批占用）' },
+    { id: 'SEG-03', name: '分片 33-48 · 创作团队/封底', state: '待生成' },
+    { id: 'SEG-04', name: '预检与色彩控制条报告', state: '待生成' },
+  ] },
   { id: 'EXP-0925-02', name: '数字样张低分辨率预览', progress: 100, status: '已完成', updatedAt: '09-25 15:18', resumable: false },
+  { id: 'EXP-1003-01', name: '印刷交付包 · PDF/X-4（R6 生产）', progress: 0, status: '排队中', updatedAt: '10-03 08:30', resumable: true, versionId: 'VER-R6', shards: [
+    { id: 'R6-S1', name: '分片 1-16 · 封面/版权页', state: '待生成' },
+    { id: 'R6-S2', name: '分片 17-32 · 剧照/曲目表', state: '待生成' },
+    { id: 'R6-S3', name: '分片 33-48 · 创作团队/封底', state: '待生成' },
+    { id: 'R6-S4', name: '预检与色彩控制条报告', state: '待生成' },
+  ] },
+  { id: 'EXP-1003-02', name: '加印交付包 · PDF/X-4（S2）', progress: 0, status: '排队中', updatedAt: '10-03 08:31', resumable: true, versionId: 'VER-S2', shards: [
+    { id: 'S2-S1', name: '分片 1-16 · 封面/版权页', state: '待生成' },
+    { id: 'S2-S2', name: '分片 17-32 · 剧照/曲目表', state: '待生成' },
+    { id: 'S2-S3', name: '分片 33-48 · 创作团队/封底', state: '待生成' },
+    { id: 'S2-S4', name: '预检与色彩控制条报告', state: '待生成' },
+  ] },
 ]
 
 export const useImpositionStore = defineStore('imposition', () => {
@@ -55,7 +88,22 @@ export const useImpositionStore = defineStore('imposition', () => {
   const pages = ref<Page[]>(restored?.pages ?? structuredClone(seedPages))
   const positions = ref<Position[]>(restored?.positions ?? structuredClone(seedPositions))
   const proofs = ref<Proof[]>(restored?.proofs ?? structuredClone(seedProofs))
-  const tasks = ref<ExportTask[]>(restored?.tasks ?? structuredClone(seedTasks))
+  // 兼容旧草稿：补齐新版分片字段；历史中断任务若没有预留单号一律降级为「待复核」
+  const normalizeTasks = (raw: ExportTask[]): ExportTask[] => raw.map((task) => {
+    const legacy = !('reservationId' in task) && !('frozen' in task) && task.status === '已中断'
+    return {
+      ...task,
+      status: legacy ? '待复核' : task.status,
+      frozen: legacy ? true : task.frozen,
+      blockedReason: legacy ? '无预留单号，旧纸批归属需重新确认' : task.blockedReason,
+      shards: task.shards ?? (task.resumable && task.status !== '已完成' ? [
+        { id: `${task.id}-S1`, name: '分片 1-16', state: task.progress > 50 ? '冻结保留' : '待生成' },
+        { id: `${task.id}-S2`, name: '分片 17-32', state: '待生成' },
+        { id: `${task.id}-S3`, name: '预检与色彩控制条报告', state: '待生成' },
+      ] : undefined),
+    }
+  })
+  const tasks = ref<ExportTask[]>(restored?.tasks ? normalizeTasks(restored.tasks) : structuredClone(seedTasks))
   const side = ref<'front' | 'back'>('front')
   const zoom = ref(72)
   const revision = ref(restored?.revision ?? 'R6')
@@ -119,7 +167,8 @@ export const useImpositionStore = defineStore('imposition', () => {
 
   function resumeTask(id: string) {
     const task = tasks.value.find((item) => item.id === id)
-    if (task && task.resumable) {
+    // 待复核 / 已冻结任务不能直接恢复，必须先在纸张预留账重新确认纸批
+    if (task && task.resumable && task.status !== '待复核' && !task.frozen) {
       task.status = '生成中'
       task.progress = Math.max(task.progress, 10)
       task.updatedAt = '刚刚'
